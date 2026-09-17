@@ -4,7 +4,7 @@ Workspace preparation for OWNIVERSE. No application skeleton or business feature
 
 ## Start here
 
-Read [AGENTS.md](AGENTS.md), then the approved specifications in [docs](docs/README.md). `/docs` is the source of truth. The document inventory identifies specifications that still need to be supplied; setup notes do not replace them.
+Read [AGENTS.md](AGENTS.md), then the approved specifications in [docs](docs/README.md). `/docs` is the source of truth. All 31 expected documents are imported, and a documentation consistency audit has been performed. RESEARCH-02 has a known truncated ending in the approved source package; setup notes do not replace the specifications.
 
 ## Repository layout
 

@@ -431,21 +431,25 @@ error
 
 # **9. Job Status**
 
-Job phải sử dụng lifecycle chuẩn.
+Job phải sử dụng lifecycle chuẩn của ARCH-02 §10–12 và API-02 §9–10; AI-03 không định nghĩa persisted Job lifecycle riêng.
+
+CREATED
+
+↓
 
 QUEUED
 
 ↓
 
-PREPARING_CONTEXT
+CLAIMED
 
 ↓
 
-READY
+PREPARING
 
 ↓
 
-GENERATING
+RUNNING
 
 ↓
 
@@ -457,7 +461,7 @@ COMPLETED
 
 Các nhánh lỗi:
 
-GENERATING
+RUNNING
 
 ↓
 
@@ -473,7 +477,7 @@ REJECTED
 
 hoặc:
 
-GENERATING
+RUNNING
 
 ↓
 
@@ -481,27 +485,31 @@ RETRY_PENDING
 
 Ngoài ra:
 
+CANCEL_REQUESTED
+
+↓
+
 CANCELLED
 
-được sử dụng khi user hoặc system chủ động dừng job.
+được sử dụng theo cancellation contract khi user hoặc system yêu cầu dừng job và worker xác nhận đã dừng.
 
 ### **Giải thích luồng**
 
-Khi application gửi yêu cầu generation, job đầu tiên nằm trong hàng đợi. AI orchestration layer sau đó lấy context từ hệ thống, tạo snapshot của input và chuyển job sang trạng thái sẵn sàng. Model được gọi khi job ở GENERATING.
+Backend xây GenerationContextV1 từ Canonical Domain Data, persist Immutable Context Snapshot, tạo/persist Generation Job tham chiếu Snapshot và commit durable state trước khi dispatch execution message tới RabbitMQ. Worker claim Job (CLAIMED), chuyển sang PREPARING để load Snapshot đã tồn tại và chuẩn bị reference assets/model dependencies. Worker MUST NOT dựng lại GenerationContextV1 từ mutable live Canon. Adapter xây model-specific prompt/conditioning từ Snapshot tại worker execution time; model được gọi khi Job ở RUNNING.
 
 Output sinh ra không lập tức được công nhận mà phải chuyển qua VALIDATING.
 
-Nếu vượt qua các validation bắt buộc, job được đánh dấu COMPLETED.
+Nếu vượt qua các validation bắt buộc, hệ thống persist Asset/Candidate/validation/provenance rồi mới cập nhật Job thành COMPLETED.
 
 Nếu generation lỗi kỹ thuật, job chuyển sang FAILED hoặc RETRY_PENDING.
 
-Nếu model tạo được output nhưng output không đạt yêu cầu nghiệp vụ, job chuyển sang REJECTED.
+Nếu model tạo được output nhưng output không đạt mandatory validation, Job chuyển sang REJECTED theo ARCH-02/API-02. User từ chối hoặc lựa chọn Candidate thuộc application workflow, không thay đổi ý nghĩa runtime state REJECTED. REVIEW_REQUIRED và APPLIED không phải runtime Job states.
 
 # **10. Generation Input Snapshot**
 
 ## **AI3-GEN-01**
 
-Hệ thống MUST tạo immutable input snapshot trước khi gọi model.
+Hệ thống MUST persist Immutable Context Snapshot của GenerationContextV1 trước khi tạo/persist Generation Job và commit durable state trước khi dispatch asynchronous execution tới RabbitMQ. Worker load Snapshot đã tồn tại của Job; Adapter chỉ xây model-specific prompt/conditioning từ Snapshot đó trước khi gọi model.
 
 Snapshot phải cho biết chính xác generation đó đã sử dụng dữ liệu gì.
 
@@ -1249,7 +1257,7 @@ System SHALL tạo Generation Job cho mỗi AI operation cần thực thi bất 
 
 ## **AI3-FR-02**
 
-System SHALL tạo immutable input snapshot trước model invocation.
+System SHALL persist Immutable Context Snapshot trước khi tạo/persist Generation Job và commit durable state trước asynchronous dispatch; worker SHALL load Snapshot đó thay vì dựng lại context từ mutable live Canon.
 
 ## **AI3-FR-03**
 
@@ -1345,35 +1353,35 @@ Các operation có nguy cơ bị gửi lại do network retry phải có cơ ch�
 
 2.  Application tạo Generation Request.
 
-3.  AI Orchestrator tạo Generation Job.
+3.  Backend/AI Application Layer xây GenerationContextV1 từ Canonical Domain Data theo AI-02.
 
-4.  AI-02 Context Layer xây Scene Generation Context.
+4.  Hệ thống persist Immutable Context Snapshot.
 
-5.  Hệ thống tạo immutable context/input snapshot.
+5.  Backend tạo/persist Generation Job tham chiếu Snapshot và commit durable state.
 
-6.  Prompt Generation tạo prompt cuối.
+6.  Backend dispatch execution message tới RabbitMQ.
 
-7.  Image Generation Service được gọi.
+7.  Worker claim Job và load Immutable Context Snapshot đã tồn tại của Job, không dựng lại context từ mutable live Canon.
 
-8.  Model trả raw image output.
+8.  Adapter xây model-specific prompt/conditioning từ Snapshot tại worker execution time.
 
-9.  Output được normalize thành Candidate.
+9.  Image Generation Service gọi model; Job ở RUNNING.
 
-10. Technical validation được thực hiện.
+10. Model trả raw image output; output được normalize thành Candidate.
 
-11. Semantic validation được thực hiện.
+11. Technical, semantic và consistency validation được thực hiện; Job ở VALIDATING.
 
-12. Consistency validation được thực hiện.
+12. Candidate nhận validation result.
 
-13. Candidate nhận validation result.
+13. Hệ thống persist Asset/Candidate/validation/provenance và generation history.
 
-14. Candidate hợp lệ được gửi về application.
+14. Job được cập nhật COMPLETED khi mandatory validation đạt và required durable artifacts đã persist; failure state tuân theo ARCH-02/API-02.
 
-15. User hoặc workflow lựa chọn candidate.
+15. Candidate hợp lệ được gửi về application.
 
-16. Candidate trở thành selected output của scene.
+16. User hoặc workflow lựa chọn candidate.
 
-17. Generation history và provenance được lưu.
+17. Candidate trở thành selected output của scene; selection được ghi nhận trong generation history.
 
 # **40. Alternate Flow — Validation Failure**
 

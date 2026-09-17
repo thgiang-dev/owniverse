@@ -800,45 +800,57 @@ Primary Audience: Backend Developer, AI Engineer, Frontend Developer, DevOps Eng
 
 **↓**
 
+**Context Snapshot Preparation**
+
+**→ Backend xây GenerationContextV1 từ Canonical Domain Data và persist Immutable Context Snapshot.**
+
+**↓**
+
 **Generation Job Created**
 
-**→ Job được lưu với trạng thái QUEUED.**
+**→ Backend tạo/persist Job tham chiếu Snapshot với trạng thái CREATED, rồi commit durable state trước khi dispatch.**
 
 **↓**
 
 **Job Enqueued**
 
-**→ Queue chuyển task đến AI Worker.**
+**→ Dispatch execution message tới RabbitMQ; Job chuyển sang QUEUED theo ARCH-02/API-02.**
 
 **↓**
 
-**Context Preparation**
+**Worker Preparation**
 
-**→ AI Service xây dựng context phù hợp.**
+**→ Worker claim Job (CLAIMED), chuyển sang PREPARING và load Immutable Context Snapshot đã tồn tại của Job. Worker không dựng lại GenerationContextV1 từ mutable live Canon.**
+
+**↓**
+
+**Adapter Input Construction**
+
+**→ Adapter xây model-specific prompt/conditioning từ Snapshot tại thời điểm worker execution.**
 
 **↓**
 
 **Model Invocation**
 
-**→ Adapter gọi model tương ứng.**
+**→ Adapter gọi model tương ứng; Job ở RUNNING.**
 
 **↓**
 
 **Output Validation**
 
-**→ Kiểm tra schema, format và constraint.**
+**→ Kiểm tra schema, format và constraint; Job ở VALIDATING.**
 
 **↓**
 
 **Result Persistence**
 
-**→ Backend lưu kết quả thành Draft/Proposal.**
+**→ Persist Asset khi applicable, Candidate/Draft/Proposal, validation và provenance trước khi cập nhật Job thành COMPLETED nếu mandatory validation đạt.**
 
 **↓**
 
-**REVIEW_REQUIRED**
+**Candidate / Application Review**
 
-**→ Frontend thông báo user xem kết quả.**
+**→ Frontend thông báo user xem kết quả; review không phải runtime Job state.**
 
 **↓**
 
@@ -1015,43 +1027,17 @@ Primary Audience: Backend Developer, AI Engineer, Frontend Developer, DevOps Eng
 
 # **11. Job State Machine**
 
-**QUEUED**
+**Runtime Job lifecycle sử dụng contract của ARCH-02 §10–12 và API-02 §9–10; AI-01 không định nghĩa state machine riêng.**
 
-**→ Job đã được tạo và đang chờ Worker.**
+**CREATED → QUEUED → CLAIMED → PREPARING → RUNNING → VALIDATING → COMPLETED**
 
-**↓**
+**Các nhánh khác theo cùng contract: RETRY_PENDING, FAILED, REJECTED, CANCEL_REQUESTED, CANCELLED.**
 
-**RUNNING**
+**PREPARING là load Snapshot đã tồn tại, reference assets và model dependencies; RUNNING là inference. COMPLETED yêu cầu output hợp lệ và required durable artifacts đã được persist.**
 
-**→ Worker đã nhận job.**
+**REJECTED nghĩa là output không đạt mandatory validation, không phải user từ chối Candidate.**
 
-**↓**
-
-**┌───────────────────────┐**
-
-**│ │**
-
-**▼ ▼**
-
-**REVIEW_REQUIRED FAILED**
-
-**→ Có kết quả → Job không hoàn tất.**
-
-**chờ user.**
-
-**↓**
-
-**┌─────────────┬───────────────┐**
-
-**▼ ▼ ▼**
-
-**APPLIED REJECTED CANCELLED**
-
-**→ User sử → User bỏ → Job bị hủy.**
-
-**dụng.**
-
-**Nếu operation không cần user review, RUNNING có thể đi đến COMPLETED.**
+**REVIEW_REQUIRED và APPLIED không phải runtime Job states. User review, apply/reject và selection thuộc Candidate/application workflow; Job COMPLETED không có nghĩa Candidate đã được chọn hoặc trở thành Canon.**
 
 # **12. Job State Requirements**
 
@@ -1065,7 +1051,7 @@ Job state phải được persistent; không chỉ lưu trong memory của serve
 Refresh browser không được làm mất khả năng theo dõi job.**
 
 **AI-JOB-004  
-Một output requiring review không được tự chuyển thành APPLIED.**
+Một output requiring review không được tự động apply/select trong Candidate/application workflow; Job completion không thay thế user review.**
 
 **AI-JOB-005  
 Job failure không được phá hủy input hoặc version trước đó.**
@@ -1849,31 +1835,37 @@ Một job AI thất bại không được làm crash application backend.**
 
 **→ Validate user/project/branch.**
 
-**→ Create Job J-100.**
+**→ Build GenerationContextV1 từ Canonical Domain Data.**
 
-**→ Store InputVersion.**
+**→ Persist Immutable Context Snapshot và giữ InputVersion.**
 
-**→ Enqueue task.**
+**→ Create/persist Job J-100 tham chiếu Snapshot.**
+
+**→ Commit durable state.**
+
+**→ Dispatch execution message tới RabbitMQ.**
 
 **Worker**
 
-**→ Receive J-100.**
+**→ Claim J-100 và load Immutable Context Snapshot đã tồn tại của Job.**
+
+**→ Không dựng lại GenerationContextV1 từ mutable live Canon.**
 
 **AI Orchestrator**
 
-**→ Build generation context.**
-
 **→ Select suitable model.**
 
-**→ Invoke model.**
+**→ Adapter builds model-specific prompt/conditioning từ Snapshot tại worker execution time.**
 
-**→ Validate structured output.**
+**→ Invoke model; Job = RUNNING.**
+
+**→ Validate structured output; Job = VALIDATING.**
 
 **Backend**
 
-**→ Save Scene Draft Version 5.**
+**→ Save Scene Draft Version 5 cùng Candidate/provenance và Asset nếu applicable.**
 
-**→ Update Job = REVIEW_REQUIRED.**
+**→ Update Job = COMPLETED sau khi mandatory validation đạt và required durable artifacts đã persist.**
 
 **Frontend**
 
@@ -1913,15 +1905,21 @@ Một job AI thất bại không được làm crash application backend.**
 
 **→ Xác định Panel Spec + Character References.**
 
-**→ Create Image Job.**
+**→ Build GenerationContextV1 từ Canonical Domain Data và persist Immutable Context Snapshot.**
+
+**→ Create/persist Image Job tham chiếu Snapshot.**
+
+**→ Commit durable state, rồi dispatch execution message tới RabbitMQ.**
 
 **Image Worker**
 
-**→ Nhận Panel Spec.**
+**→ Claim Job và load Immutable Context Snapshot đã tồn tại, bao gồm Panel Spec và Character References.**
 
-**→ AI Orchestrator chuẩn bị image input.**
+**→ Không dựng lại GenerationContextV1 từ mutable live Canon; Adapter xây model-specific prompt/conditioning từ Snapshot.**
 
-**→ Image Model tạo ảnh.**
+**→ Image Model tạo ảnh; Job = RUNNING.**
+
+**→ Validate output; Job = VALIDATING.**
 
 **Object Storage**
 
@@ -1929,7 +1927,9 @@ Một job AI thất bại không được làm crash application backend.**
 
 **Backend**
 
-**→ Lưu Asset metadata + Panel Version.**
+**→ Lưu Asset metadata + Candidate + Panel Version + provenance.**
+
+**→ Update Job = COMPLETED sau khi mandatory validation đạt và required durable artifacts đã persist.**
 
 **Frontend**
 

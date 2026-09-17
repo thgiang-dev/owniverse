@@ -1453,7 +1453,7 @@ Local development có thể chạy:
 
 - PostgreSQL;
 
-- Redis/queue;
+- RabbitMQ;
 
 - Python worker;
 
