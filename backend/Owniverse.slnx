@@ -1,3 +1,7 @@
 <Solution>
   <Project Path="src/Api/Owniverse.Api.csproj" />
+  <Project Path="src/Persistence/Owniverse.Persistence.csproj" />
+  <Project Path="src/Shared/Owniverse.Shared.csproj" />
+  <Project Path="src/Infrastructure/Owniverse.Infrastructure.csproj" />
+  <Project Path="tests/InfrastructureSmoke/InfrastructureSmoke.csproj" />
 </Solution>
