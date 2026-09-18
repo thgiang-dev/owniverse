@@ -26,7 +26,7 @@ def get(port, path):
 
 
 @contextmanager
-def run_api(connection, rabbitmq_url=os.environ.get("RABBITMQ_URL", "amqp://test:test@127.0.0.1:1/%2F")):
+def run_api(connection, rabbitmq_url=os.environ.get("RABBITMQ_URL", "amqp://test:test@127.0.0.1:1/%2F"), storage_settings=None):
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
@@ -38,7 +38,15 @@ def run_api(connection, rabbitmq_url=os.environ.get("RABBITMQ_URL", "amqp://test
     if connection is not None:
         environment["DATABASE_URL"] = connection
     environment["ASPNETCORE_ENVIRONMENT"] = "Production"
-    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as log:
+    with tempfile.TemporaryDirectory(prefix="owniverse-api-storage-") as storage_root, \
+            tempfile.TemporaryFile(mode="w+", encoding="utf-8") as log:
+        environment["ASSET_STORAGE_PROVIDER"] = "local"
+        environment["ASSET_STORAGE_PATH"] = storage_root
+        for key, value in (storage_settings or {}).items():
+            if value is None:
+                environment.pop(key, None)
+            else:
+                environment[key] = value
         process = subprocess.Popen(
             ["dotnet", str(API), "--urls", f"http://127.0.0.1:{port}"],
             cwd=BACKEND, env=environment, stdout=log, stderr=subprocess.STDOUT,

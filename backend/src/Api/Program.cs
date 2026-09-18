@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Owniverse.Persistence;
 using Owniverse.Infrastructure.Messaging;
+using Owniverse.Infrastructure.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddMessaging(builder.Configuration);
+builder.Services.AddAssetStorage(builder.Configuration, builder.Environment.ContentRootPath);
 
 var app = builder.Build();
 

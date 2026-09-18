@@ -45,7 +45,7 @@ build/
 *.log
 /deployment/data/
 /deployment/volumes/
-/local-data/
+local-data/
 /uploads/
 /artifacts/
 /tmp/

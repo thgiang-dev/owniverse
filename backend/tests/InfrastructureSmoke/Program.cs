@@ -7,6 +7,11 @@ using Owniverse.Persistence;
 using Owniverse.Shared.Messaging;
 using RabbitMQ.Client;
 
+if (args is ["storage-tests"])
+{
+    return await AssetStorageChecks.RunAsync();
+}
+
 // Test harness only. Dependency probes are read-only; publisher smoke uses a temporary queue.
 if (args.Length != 1 || args[0] is not ("postgresql" or "rabbitmq" or "publisher" or "publisher-unavailable"))
 {
